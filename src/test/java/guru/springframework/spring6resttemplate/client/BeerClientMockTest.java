@@ -92,7 +92,6 @@ public class BeerClientMockTest {
         // Inicializamos el Client para que se inicialize con el RestTemplateBuilder que acabamos de configurar.
         beerClient = new BeerClientImpl(mockRestTemplateBuilder, BASE_PATH, PORT, SERVICE_PATH, ID_PATH);
 
-
         beer = getBeerDto();
         responseBody = objectMapper.writeValueAsString(beer);
     }
@@ -116,6 +115,9 @@ public class BeerClientMockTest {
 
         server.expect(method(HttpMethod.GET))
                 .andExpect(requestTo(URL))
+                // V224 With Basic Authorization Header
+                // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
+                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
                 .andRespond(withSuccess(payload, MediaType.APPLICATION_JSON));
 
         Page<BeerDTO> dtos = beerClient.list(null, null, null, null, null);
@@ -127,6 +129,9 @@ public class BeerClientMockTest {
 
         server.expect(method(HttpMethod.GET))
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
+                // V224 With Basic Authorization Header
+                // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
+                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
     }
 
@@ -139,7 +144,9 @@ public class BeerClientMockTest {
         // AQUI: Configuramos el comportamiento del Mock Server para las dos peticiones que hacemos en el métod Create del client
         server.expect(method(HttpMethod.POST))
                 .andExpect(requestTo(URL))
-
+                // V224 With Basic Authorization Header
+                // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
+                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
                 //.andRespond(withAccepted().location(uri));  // Con esta solo funciona la opción 2 de la implementacion
                 // CON ESTA CONFIGURACIÓN FUNCIONAN LAS DOS IMPLEMENTACION DEL METODO Create del Cliente (VER OPCIONES DE IMPLEMENTACIÓN)
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON).location(uri));
@@ -147,6 +154,9 @@ public class BeerClientMockTest {
         // mockGetOperation();  // PARA EVITAR REPETIR CÓDIGO
         server.expect(method(HttpMethod.GET))
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
+                // V224 With Basic Authorization Header
+                // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
+                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
 
         BeerDTO response = beerClient.create(beer);
@@ -159,6 +169,9 @@ public class BeerClientMockTest {
 
         server.expect(method(HttpMethod.GET))
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
+                // V224 With Basic Authorization Header
+                // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
+                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
 
         BeerDTO response = beerClient.getById(beer.getId());
@@ -172,6 +185,9 @@ public class BeerClientMockTest {
 
         server.expect(method(HttpMethod.PUT))
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
+                // V224 With Basic Authorization Header
+                // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
+                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
                 .andRespond(withSuccess());
 
         // Extraemos el código repetido * OPERACION GET * En el test Create, Update y lo convertimos en una función para ser llamada en los dos métodos
@@ -187,6 +203,9 @@ public class BeerClientMockTest {
         // Configuramos el comportamiento del Mock Server
         server.expect(method(HttpMethod.DELETE))
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
+                // V224 With Basic Authorization Header
+                // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
+                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
                 .andRespond(withSuccess());
 
         beerClient.delete(beer.getId());
@@ -201,6 +220,9 @@ public class BeerClientMockTest {
         // Configuramos el comportamiento del Mock Server
         server.expect(method(HttpMethod.DELETE))
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
+                // V224 With Basic Authorization Header
+                // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
+                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
                 .andRespond(withResourceNotFound());
 
         // Aqui lanza la excepción
@@ -234,6 +256,9 @@ public class BeerClientMockTest {
 
         server.expect(method(HttpMethod.GET))
                 .andExpect(requestTo(uri))
+                // V224 With Basic Authorization Header
+                // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
+                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
                 .andExpect(queryParam("name", "ALE"))
                 .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
 

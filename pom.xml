@@ -25,6 +25,10 @@
             <groupId>org.springframework.data</groupId>
             <artifactId>spring-data-commons</artifactId>
         </dependency>
+        <dependency> <!-- V244 - ADD OAUTH 2.0 CLIENT - VER LAS PROPIEDADES ASOCIADAS EN EL FICHERO DE CONFIGURACIÓN -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
