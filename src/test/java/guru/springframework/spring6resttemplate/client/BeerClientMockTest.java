@@ -3,6 +3,7 @@ package guru.springframework.spring6resttemplate.client;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import guru.springframework.spring6resttemplate.config.ConfigProperties;
+import guru.springframework.spring6resttemplate.config.OAuthClientInterceptor;
 import guru.springframework.spring6resttemplate.config.RestTemplateBuilderConfig;
 import guru.springframework.spring6resttemplate.model.BeerDTO;
 import guru.springframework.spring6resttemplate.model.BeerStyle;
@@ -12,12 +13,24 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.client.RestClientTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.MockServerRestTemplateCustomizer;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.client.InMemoryOAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -28,11 +41,13 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
@@ -52,6 +67,10 @@ public class BeerClientMockTest {
     static final String ID_PATH         = "/{id}";
 
     final String URL = BASE_PATH + ":" + PORT + SERVICE_PATH;
+
+    // V248 - Mock Oauth 2.0 Manager
+    static final String REGISTRATION_ID = "springauth";
+    static final String BEARER_TEST = "Bearer test";
 
     // V208
     // @Autowired
@@ -74,8 +93,58 @@ public class BeerClientMockTest {
     BeerDTO beer;
     String responseBody;
 
+    // V248 - Mock Oauth 2.0 Manager
+    // No queremos usar la implementación real que llama al * Authorization Service * por lo que moqueamos OAuth2AuthorizedClientManager
+    @MockBean
+    OAuth2AuthorizedClientManager manager;
+
+    // V248
+    // Aquí Srping Boot Test, El * Test Context * coge esto como configuración y los bean los pone en el contexto de la prueba
+    // @Import(RestTemplateBuilderConfig.class), Como tenemos anotada la clase con @Import(RestTemplateBuilderConfig.class)
+    // Tenemos que proporcionar las dependencias que esta clase tiene
+    // 1 - ClientRegistrationRepository
+    // 2 - OAuth2AuthorizedClientService
+    // 3 - Creamos unas instancia del Interceptor
+    @TestConfiguration
+    public static class TestConfig{
+
+        @Bean
+        ClientRegistrationRepository clientRegistrationRepository(){
+            return new InMemoryClientRegistrationRepository(ClientRegistration
+                    .withRegistrationId("springauth")
+                    .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                    .clientId("test")
+                    .tokenUri("test")
+                    .build());
+        }
+
+        @Bean
+        OAuth2AuthorizedClientService auth2AuthorizedClientService(ClientRegistrationRepository clientRegistrationRepository){
+            return new InMemoryOAuth2AuthorizedClientService(clientRegistrationRepository);
+        }
+
+        @Bean
+        OAuthClientInterceptor oAuthClientInterceptor(OAuth2AuthorizedClientManager manager,
+                                                      ClientRegistrationRepository clientRegistrationRepository){
+            return new OAuthClientInterceptor(manager, clientRegistrationRepository);
+        }
+    }
+
+    @Autowired
+    ClientRegistrationRepository clientRegistrationRepository;
+
     @BeforeEach
     void setUp() throws JsonProcessingException {
+        // V248
+        ClientRegistration clientRegistration = clientRegistrationRepository
+                .findByRegistrationId(REGISTRATION_ID);
+
+        OAuth2AccessToken token = new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER,
+                "test", Instant.MIN, Instant.MAX);
+
+        when(manager.authorize(any())).thenReturn(new OAuth2AuthorizedClient(clientRegistration,
+                "test", token));
+
         // V208
         // Cargamos el * base path *
         // REDUNDANTE PORQUE YA LO COGEMOS DEL @Autowired -> RestTemplateBuilder restTemplateBuilderConfigured;
@@ -117,7 +186,12 @@ public class BeerClientMockTest {
                 .andExpect(requestTo(URL))
                 // V224 With Basic Authorization Header
                 // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
-                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                // V248 - Tenemos que modificar .anExpect para que valide ahora el * Token MOCK *
+                // java.lang.AssertionError: Request header [Authorization] expected:<Basic dXNlcjE6cGFzc3dvcmQ=> but was:<Bearer test>
+                // Expected :Basic dXNlcjE6cGFzc3dvcmQ=
+                // Actual   :Bearer test
+                // .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                .andExpect(header("Authorization",BEARER_TEST))
                 .andRespond(withSuccess(payload, MediaType.APPLICATION_JSON));
 
         Page<BeerDTO> dtos = beerClient.list(null, null, null, null, null);
@@ -131,7 +205,12 @@ public class BeerClientMockTest {
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
                 // V224 With Basic Authorization Header
                 // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
-                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                // V248 - Tenemos que modificar .anExpect para que valide ahora el * Token MOCK *
+                // java.lang.AssertionError: Request header [Authorization] expected:<Basic dXNlcjE6cGFzc3dvcmQ=> but was:<Bearer test>
+                // Expected :Basic dXNlcjE6cGFzc3dvcmQ=
+                // Actual   :Bearer test
+                // .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                .andExpect(header("Authorization",BEARER_TEST))
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
     }
 
@@ -146,7 +225,12 @@ public class BeerClientMockTest {
                 .andExpect(requestTo(URL))
                 // V224 With Basic Authorization Header
                 // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
-                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                // V248 - Tenemos que modificar .anExpect para que valide ahora el * Token MOCK *
+                // java.lang.AssertionError: Request header [Authorization] expected:<Basic dXNlcjE6cGFzc3dvcmQ=> but was:<Bearer test>
+                // Expected :Basic dXNlcjE6cGFzc3dvcmQ=
+                // Actual   :Bearer test
+                // .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                .andExpect(header("Authorization",BEARER_TEST))
                 //.andRespond(withAccepted().location(uri));  // Con esta solo funciona la opción 2 de la implementacion
                 // CON ESTA CONFIGURACIÓN FUNCIONAN LAS DOS IMPLEMENTACION DEL METODO Create del Cliente (VER OPCIONES DE IMPLEMENTACIÓN)
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON).location(uri));
@@ -156,7 +240,8 @@ public class BeerClientMockTest {
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
                 // V224 With Basic Authorization Header
                 // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
-                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                // v248
+                .andExpect(header("Authorization",BEARER_TEST))
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
 
         BeerDTO response = beerClient.create(beer);
@@ -171,7 +256,7 @@ public class BeerClientMockTest {
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
                 // V224 With Basic Authorization Header
                 // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
-                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                .andExpect(header("Authorization",BEARER_TEST))
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
 
         BeerDTO response = beerClient.getById(beer.getId());
@@ -187,7 +272,7 @@ public class BeerClientMockTest {
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
                 // V224 With Basic Authorization Header
                 // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
-                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                .andExpect(header("Authorization",BEARER_TEST))
                 .andRespond(withSuccess());
 
         // Extraemos el código repetido * OPERACION GET * En el test Create, Update y lo convertimos en una función para ser llamada en los dos métodos
@@ -205,7 +290,12 @@ public class BeerClientMockTest {
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
                 // V224 With Basic Authorization Header
                 // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
-                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                // V248 - Tenemos que modificar .anExpect para que valide ahora el * Token MOCK *
+                // java.lang.AssertionError: Request header [Authorization] expected:<Basic dXNlcjE6cGFzc3dvcmQ=> but was:<Bearer test>
+                // Expected :Basic dXNlcjE6cGFzc3dvcmQ=
+                // Actual   :Bearer test
+                // .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                .andExpect(header("Authorization",BEARER_TEST))
                 .andRespond(withSuccess());
 
         beerClient.delete(beer.getId());
@@ -222,7 +312,7 @@ public class BeerClientMockTest {
                 .andExpect(requestToUriTemplate(URL + ID_PATH, beer.getId()))
                 // V224 With Basic Authorization Header
                 // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
-                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                .andExpect(header("Authorization",BEARER_TEST))
                 .andRespond(withResourceNotFound());
 
         // Aqui lanza la excepción
@@ -258,7 +348,7 @@ public class BeerClientMockTest {
                 .andExpect(requestTo(uri))
                 // V224 With Basic Authorization Header
                 // Le indicamos al Mock Server que le tiene que llegar la cabecera de serguridad
-                .andExpect(header("Authorization","Basic dXNlcjE6cGFzc3dvcmQ="))
+                .andExpect(header("Authorization",BEARER_TEST))
                 .andExpect(queryParam("name", "ALE"))
                 .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
 

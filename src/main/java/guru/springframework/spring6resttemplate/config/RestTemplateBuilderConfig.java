@@ -122,8 +122,9 @@ public class RestTemplateBuilderConfig {
 //                .uriTemplateHandler(new DefaultUriBuilderFactory(BASE_PATH + ":" + PORT));
 
         // V247 -- ADD INTERCEPTOR TO RestTemplateBuilder
+        // TODO - RestTemplate que se contruya con este RestTemplateBuilder tendra este inteceptor que nos genera el Token JWT y lo añade a la peticíón
         return configurer.configure(new RestTemplateBuilder())
-                .additionalInterceptors(interceptor)
+                .additionalInterceptors(interceptor)  //V247 - Add ClientHttpRequestInterceptor
                 .uriTemplateHandler(new DefaultUriBuilderFactory(BASE_PATH + ":" + PORT));
 
     }

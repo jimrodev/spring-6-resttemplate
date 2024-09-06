@@ -51,7 +51,7 @@ public class OAuthClientInterceptor implements ClientHttpRequestInterceptor {
         OAuth2AuthorizeRequest oAuth2AuthorizeRequest = OAuth2AuthorizeRequest
                 // V246 - clientRegistration se configura desde el application.properties spring.security.oauth2.client.registration.springauth...
                 .withClientRegistrationId(clientRegistration.getRegistrationId())
-                .principal(createPrincipal())
+                .principal(principal)
                 .build();
 
         // OAuth2AuthorizedClientManager obtiene el Token JWT de servidor de Authorización,
